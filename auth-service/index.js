@@ -1,72 +1,59 @@
 const express = require("express");
-const { JsonWebTokenError } = require("jsonwebtoken");
-const mongoose = require("mongoose");
 const app = express();
-const PORT = process.env.PORT || 7070;
-const User = require("./user");
+const PORT = process.env.PORT_ONE || 7070;
+const mongoose = require("mongoose");
+const User = require("./User");
+const jwt = require("jsonwebtoken");
+
+mongoose.connect(
+    "mongodb://localhost/auth-service",
+    {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+    },
+    () => {
+        console.log(`Auth-Service DB Connected`);
+    }
+);
 
 app.use(express.json());
 
-app.listen(PORT, () => {
-  console.log(`Auth Service on Port ${PORT}`);
-});
-
-mongoose.connect(
-  "mongodb://localhost/e-auth-services",
-  {
-    useNewUrlParams: true,
-    useUnifiedTopology: true,
-  },
-  () => {
-    console.log("E-auth-services DB Connect");
-  }
-);
-
-// Register
-
-app.post("/api/auth/register", async (req, res) => {
-  const { email, password, name } = req.body;
-  const userExists = await User.findOne({ email });
-  if (userExists) {
-    res.json({ message: "User Already registered" });
-  } else {
-    const newUser = new User({
-      name,
-      email,
-      password,
-    });
-    newUser.save();
-    return res.json(newUser);
-  }
-});
-
-// Login
-app.get("/api/auth/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  const user = await User.findOne({ email });
-
-  if (!user) {
-    return res.json({ message: "user doesn't not exit" });
-  } else {
-    // Check Password
-
-    if (password !== user.password) {
-      return res.json({
-        message: "password is incorrect",
-      });
+app.post("/auth/login", async (req, res) => {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) {
+        return res.json({ message: "User doesn't exist" });
+    } else {
+        if (password !== user.password) {
+            return res.json({ message: "Password Incorrect" });
+        }
+        const payload = {
+            email,
+            name: user.name
+        };
+        jwt.sign(payload, "secret", (err, token) => {
+            if (err) console.log(err);
+            else return res.json({ token: token });
+        });
     }
+});
 
-    const payLoad = {
-      email,
-      name: user.name,
-    };
-    jwt.sign(payLoad, "secret", (err, token) => {
-      if (err) {
-        console.error(err, "Error signing");
-      } else {
-        return res.json({ token: token });
-      }
-    });
-  }
+app.post("/auth/register", async (req, res) => {
+    const { email, password, name } = req.body;
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+        return res.json({ message: "User already exists" });
+    } else {
+        const newUser = new User({
+            email,
+            name,
+            password,
+        });
+        newUser.save();
+        return res.json(newUser);
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Auth-Service at ${PORT}`);
 });
